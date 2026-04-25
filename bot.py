@@ -14,37 +14,36 @@ def send_telegram(msg):
     try:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         data = {"chat_id": CHAT_ID, "text": msg}
-        requests.post(url, data=data)
+        requests.post(url, data=data, timeout=10)
     except Exception as e:
         print(f"Telegram Error: {e}")
 
 def get_klines(symbol):
     try:
         url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol}&interval={interval}&limit=100"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
         data = response.json()
 
-        # تحقق من API
         if data.get("retCode") != 0:
-            print(f"❌ API Error {symbol}: {data}")
+            print(f"❌ API Error: {symbol} - {data}")
             return None
 
         return data["result"]["list"]
 
     except Exception as e:
-        print(f"❌ Request Error {symbol}: {e}")
+        print(f"❌ Request Error: {symbol} - {e}")
         return None
 
 def calculate_rsi(closes, period=14):
-    if len(closes) < period:
-        return 50
-
     gains, losses = [], []
 
     for i in range(1, len(closes)):
         diff = closes[i] - closes[i-1]
         gains.append(max(diff, 0))
         losses.append(abs(min(diff, 0)))
+
+    if len(gains) < period:
+        return 50
 
     avg_gain = sum(gains[-period:]) / period
     avg_loss = sum(losses[-period:]) / period
@@ -79,6 +78,9 @@ def analyze_symbol(symbol):
         closes = [float(c[4]) for c in data[::-1]]
         volumes = [float(c[5]) for c in data[::-1]]
 
+        if len(closes) < 20:
+            return
+
         price = closes[-1]
         prev_price = closes[-2]
 
@@ -102,9 +104,9 @@ def analyze_symbol(symbol):
 
         if signal != "WAIT" and last_signal.get(symbol) != signal:
             if signal == "BUY":
-                msg = f"🟢 BUY {symbol}\n💰 السعر: {price}\n📊 RSI: {round(rsi,2)}\n🐋 Volume: {whale}\n🎯 TP: {tp}\n🛑 SL: {sl}"
+                msg = f"🟢 BUY {symbol}\n💰 Price: {price}\n📊 RSI: {round(rsi,2)}\n🐋 Volume Spike: {whale}\n🎯 TP: {tp}\n🛑 SL: {sl}"
             else:
-                msg = f"🔴 EXIT {symbol}\n💰 السعر: {price}\n📊 RSI: {round(rsi,2)}"
+                msg = f"🔴 EXIT {symbol}\n💰 Price: {price}\n📊 RSI: {round(rsi,2)}"
 
             send_telegram(msg)
             last_signal[symbol] = signal
@@ -112,12 +114,13 @@ def analyze_symbol(symbol):
         print(f"{symbol} | RSI: {round(rsi,1)} | Signal: {signal}")
 
     except Exception as e:
-        print(f"❌ خطأ في {symbol}: {e}")
+        print(f"❌ Error in {symbol}: {e}")
 
+# تشغيل البوت
 while True:
     print("\n📊 SPOT BOT RUNNING...\n")
 
     for symbol in symbols:
         analyze_symbol(symbol)
 
-    time.sleep(20)    print("\n📊 SPOT BOT RUNNING...\n")
+    time.sleep(20)
