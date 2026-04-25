@@ -5,7 +5,9 @@ import os
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-symbols = ["SOLUSDT", "ORDIUSDT", "TRUMPUSDT"]
+# عملات مضمونة على Bybit
+symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+
 interval = "1"
 
 last_signal = {}
@@ -17,8 +19,21 @@ def send_telegram(msg):
 
 def get_klines(symbol):
     url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol}&interval={interval}&limit=100"
-    data = requests.get(url).json()
-    return data["result"]["list"]
+    
+    try:
+        response = requests.get(url)
+        data = response.json()
+
+        # تحقق من نجاح API
+        if data.get("retCode") != 0:
+            print(f"❌ API Error: {symbol} - {data}")
+            return None
+
+        return data["result"]["list"]
+
+    except Exception as e:
+        print(f"❌ Request Error: {symbol} - {e}")
+        return None
 
 def calculate_rsi(closes, period=14):
     gains, losses = [], []
@@ -52,6 +67,9 @@ def analyze_symbol(symbol):
     try:
         data = get_klines(symbol)
 
+        if not data:
+            return
+
         closes = [float(c[4]) for c in data[::-1]]
         volumes = [float(c[5]) for c in data[::-1]]
 
@@ -78,7 +96,7 @@ def analyze_symbol(symbol):
 
         if signal != "WAIT" and last_signal.get(symbol) != signal:
             if signal == "BUY":
-                msg = f"🟢 BUY {symbol}\n💰 السعر: {price}\n📊 RSI: {round(rsi,2)}\n🐋 Volume: {whale}\n🎯 TP: {tp}\n🛑 SL: {sl}"
+                msg = f"🟢 BUY {symbol}\n💰 السعر: {price}\n📊 RSI: {round(rsi,2)}\n🐋 Volume Spike: {whale}\n🎯 TP: {tp}\n🛑 SL: {sl}"
             else:
                 msg = f"🔴 EXIT {symbol}\n💰 السعر: {price}\n📊 RSI: {round(rsi,2)}"
 
@@ -87,8 +105,8 @@ def analyze_symbol(symbol):
 
         print(f"{symbol} | RSI: {round(rsi,1)} | Signal: {signal}")
 
-    except:
-        print(f"❌ خطأ في {symbol}")
+    except Exception as e:
+        print(f"❌ خطأ في {symbol}: {e}")
 
 while True:
     print("\n📊 SPOT BOT RUNNING...\n")
