@@ -5,37 +5,40 @@ import os
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-# عملات مضمونة على Bybit
-symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
-
+symbols = ["SOLUSDT", "ORDIUSDT", "TRUMPUSDT"]
 interval = "1"
 
 last_signal = {}
 
 def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": msg}
-    requests.post(url, data=data)
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        data = {"chat_id": CHAT_ID, "text": msg}
+        requests.post(url, data=data)
+    except Exception as e:
+        print(f"Telegram Error: {e}")
 
 def get_klines(symbol):
-    url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol}&interval={interval}&limit=100"
-    
     try:
+        url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol}&interval={interval}&limit=100"
         response = requests.get(url)
         data = response.json()
 
-        # تحقق من نجاح API
+        # تحقق من API
         if data.get("retCode") != 0:
-            print(f"❌ API Error: {symbol} - {data}")
+            print(f"❌ API Error {symbol}: {data}")
             return None
 
         return data["result"]["list"]
 
     except Exception as e:
-        print(f"❌ Request Error: {symbol} - {e}")
+        print(f"❌ Request Error {symbol}: {e}")
         return None
 
 def calculate_rsi(closes, period=14):
+    if len(closes) < period:
+        return 50
+
     gains, losses = [], []
 
     for i in range(1, len(closes)):
@@ -53,6 +56,9 @@ def calculate_rsi(closes, period=14):
     return 100 - (100 / (1 + rs))
 
 def calculate_ema(prices, period=9):
+    if len(prices) < period:
+        return prices[-1]
+
     ema = prices[0]
     k = 2 / (period + 1)
 
@@ -96,7 +102,7 @@ def analyze_symbol(symbol):
 
         if signal != "WAIT" and last_signal.get(symbol) != signal:
             if signal == "BUY":
-                msg = f"🟢 BUY {symbol}\n💰 السعر: {price}\n📊 RSI: {round(rsi,2)}\n🐋 Volume Spike: {whale}\n🎯 TP: {tp}\n🛑 SL: {sl}"
+                msg = f"🟢 BUY {symbol}\n💰 السعر: {price}\n📊 RSI: {round(rsi,2)}\n🐋 Volume: {whale}\n🎯 TP: {tp}\n🛑 SL: {sl}"
             else:
                 msg = f"🔴 EXIT {symbol}\n💰 السعر: {price}\n📊 RSI: {round(rsi,2)}"
 
@@ -114,4 +120,4 @@ while True:
     for symbol in symbols:
         analyze_symbol(symbol)
 
-    time.sleep(15)
+    time.sleep(20)    print("\n📊 SPOT BOT RUNNING...\n")
