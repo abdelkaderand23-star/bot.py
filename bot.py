@@ -1,61 +1,26 @@
 import requests
-import time
 import os
+from telegram import Update, ReplyKeyboardMarkup
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
 
-# أزواج مضمونة شغالة
-symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+pairs = ["EURUSD", "GBPUSD", "XAUUSD"]
 
-interval = "1"
-last_signal = {}
-
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
-
-def send_telegram(msg):
+# 📊 جلب بيانات من Binance (لأنها بدون حظر)
+def get_data(symbol):
     try:
-        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-        data = {"chat_id": CHAT_ID, "text": msg}
-        requests.post(url, data=data)
-    except Exception as e:
-        print(f"❌ Telegram Error: {e}")
-
-def get_klines(symbol):
-    try:
-        # ✅ endpoint الجديد
-        url = "https://api.bytick.com/v5/market/kline"
-
-        params = {
-            "category": "linear",
-            "symbol": symbol,
-            "interval": interval,
-            "limit": 100
-        }
-
-        response = requests.get(url, params=params, headers=headers)
-
-        if response.status_code != 200:
-            print(f"❌ HTTP Error {symbol}: {response.status_code}")
-            return None
-
-        data = response.json()
-
-        if data.get("retCode") != 0:
-            print(f"❌ API Error {symbol}: {data}")
-            return None
-
-        return data["result"]["list"]
-
-    except Exception as e:
-        print(f"❌ Request Error {symbol}: {e}")
+        symbol = symbol + "T" if symbol != "XAUUSD" else "BTCUSDT"
+        url = "https://api.binance.com/api/v3/klines"
+        params = {"symbol": symbol, "interval": "1m", "limit": 100}
+        data = requests.get(url, params=params).json()
+        closes = [float(c[4]) for c in data]
+        return closes
+    except:
         return None
 
 def calculate_rsi(closes, period=14):
     gains, losses = [], []
-
     for i in range(1, len(closes)):
         diff = closes[i] - closes[i-1]
         gains.append(max(diff, 0))
@@ -73,63 +38,67 @@ def calculate_rsi(closes, period=14):
 def calculate_ema(prices, period=9):
     ema = prices[0]
     k = 2 / (period + 1)
-
     for price in prices:
         ema = price * k + ema * (1 - k)
-
     return ema
 
-def analyze_symbol(symbol):
-    global last_signal
+def analyze(pair):
+    closes = get_data(pair)
+    if not closes:
+        return "❌ خطأ في جلب البيانات"
 
-    data = get_klines(symbol)
+    price = closes[-1]
+    rsi = calculate_rsi(closes)
+    ema = calculate_ema(closes)
 
-    if not data:
-        return
+    signal = "WAIT"
 
-    try:
-        closes = [float(c[4]) for c in data[::-1]]
-        volumes = [float(c[5]) for c in data[::-1]]
+    if rsi < 35 and price > ema:
+        signal = "BUY"
+    elif rsi > 65 and price < ema:
+        signal = "SELL"
 
-        price = closes[-1]
-        prev_price = closes[-2]
+    tp = round(price * 1.002, 5)
+    sl = round(price * 0.998, 5)
 
-        rsi = calculate_rsi(closes)
-        ema = calculate_ema(closes)
+    return f"""
+📊 {pair} ANALYSIS
 
-        avg_volume = sum(volumes[-10:]) / 10
-        current_volume = volumes[-1]
+💰 Price: {price}
+📈 RSI: {round(rsi,2)}
+📉 EMA: {round(ema,5)}
 
-        whale = current_volume > avg_volume * 2
+🚦 Signal: {signal}
 
-        signal = "WAIT"
+🎯 TP: {tp}
+🛑 SL: {sl}
+"""
 
-        if rsi < 35 and price > ema and prev_price < ema and whale:
-            signal = "BUY"
-        elif rsi > 65 or price < ema:
-            signal = "EXIT"
+# 🚀 عند /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[p] for p in pairs]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-        tp = round(price * 1.02, 4)
-        sl = round(price * 0.99, 4)
+    await update.message.reply_text(
+        "اختر الزوج 👇",
+        reply_markup=reply_markup
+    )
 
-        if signal != "WAIT" and last_signal.get(symbol) != signal:
-            if signal == "BUY":
-                msg = f"🟢 BUY {symbol}\n💰 Price: {price}\n📊 RSI: {round(rsi,2)}\n🐋 Volume Spike: {whale}\n🎯 TP: {tp}\n🛑 SL: {sl}"
-            else:
-                msg = f"🔴 EXIT {symbol}\n💰 Price: {price}\n📊 RSI: {round(rsi,2)}"
+# 📊 عند اختيار زوج
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pair = update.message.text
 
-            send_telegram(msg)
-            last_signal[symbol] = signal
+    if pair in pairs:
+        result = analyze(pair)
+        await update.message.reply_text(result)
+    else:
+        await update.message.reply_text("❌ اختر من الأزرار فقط")
 
-        print(f"{symbol} | RSI: {round(rsi,1)} | Signal: {signal}")
+# تشغيل البوت
+app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    except Exception as e:
-        print(f"❌ Error in {symbol}: {e}")
+app.add_handler(CommandHandler("start", start))
+app.add_handler(MessageHandler(filters.TEXT, handle_message))
 
-while True:
-    print("\n📊 SPOT BOT RUNNING...\n")
-
-    for symbol in symbols:
-        analyze_symbol(symbol)
-
-    time.sleep(20)
+print("🤖 BOT STARTED...")
+app.run_polling()
