@@ -5,9 +5,10 @@ import os
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 
-symbols = ["SOLUSDT", "ORDIUSDT", "TRUMPUSDT"]
-interval = "1"
+# أزواج مضمونة شغالة
+symbols = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 
+interval = "1"
 last_signal = {}
 
 headers = {
@@ -19,12 +20,14 @@ def send_telegram(msg):
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         data = {"chat_id": CHAT_ID, "text": msg}
         requests.post(url, data=data)
-    except:
-        print("❌ Telegram Error")
+    except Exception as e:
+        print(f"❌ Telegram Error: {e}")
 
 def get_klines(symbol):
     try:
-        url = "https://api.bybit.com/v5/market/kline"
+        # ✅ endpoint الجديد
+        url = "https://api.bytick.com/v5/market/kline"
+
         params = {
             "category": "linear",
             "symbol": symbol,
@@ -111,7 +114,7 @@ def analyze_symbol(symbol):
 
         if signal != "WAIT" and last_signal.get(symbol) != signal:
             if signal == "BUY":
-                msg = f"🟢 BUY {symbol}\n💰 Price: {price}\n📊 RSI: {round(rsi,2)}\n🐋 Volume: {whale}\n🎯 TP: {tp}\n🛑 SL: {sl}"
+                msg = f"🟢 BUY {symbol}\n💰 Price: {price}\n📊 RSI: {round(rsi,2)}\n🐋 Volume Spike: {whale}\n🎯 TP: {tp}\n🛑 SL: {sl}"
             else:
                 msg = f"🔴 EXIT {symbol}\n💰 Price: {price}\n📊 RSI: {round(rsi,2)}"
 
