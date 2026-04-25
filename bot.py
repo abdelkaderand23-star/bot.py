@@ -21,11 +21,25 @@ def send_telegram(msg):
 def get_klines(symbol):
     try:
         url = f"https://api.bybit.com/v5/market/kline?category=linear&symbol={symbol}&interval={interval}&limit=100"
-        response = requests.get(url, timeout=10)
-        data = response.json()
+
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+
+        response = requests.get(url, headers=headers, timeout=10)
+
+        if response.status_code != 200:
+            print(f"❌ HTTP Error {symbol}: {response.status_code}")
+            return None
+
+        try:
+            data = response.json()
+        except:
+            print(f"❌ Invalid JSON {symbol}: {response.text[:100]}")
+            return None
 
         if data.get("retCode") != 0:
-            print(f"❌ API Error: {symbol} - {data}")
+            print(f"❌ API Error {symbol}: {data}")
             return None
 
         return data["result"]["list"]
@@ -123,4 +137,4 @@ while True:
     for symbol in symbols:
         analyze_symbol(symbol)
 
-    time.sleep(20)
+    time.sleep(30)
