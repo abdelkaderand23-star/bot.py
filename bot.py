@@ -2,8 +2,8 @@ import requests
 import time
 import os
 
-TELEGRAM_TOKEN = os.getenv("8748579409:AAFK96pEm4URu46aGw9e7SAfsUTh9WxZd5k")
-CHAT_ID = os.getenv("6341614127")
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
 symbols = ["SOLUSDT", "ORDIUSDT", "TRUMPUSDT"]
 interval = "1"
