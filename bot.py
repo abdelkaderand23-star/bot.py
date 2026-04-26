@@ -1,12 +1,16 @@
 import requests
+import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-TOKEN = "PUT_TELEGRAM_TOKEN_HERE"
+# 🔐 نجيب التوكن من Variables
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 
-# 🔥 هنا نحط API تبع تحليل الصور (مؤقت تحليل بسيط)
+if not TOKEN:
+    raise ValueError("❌ لازم تضيف TELEGRAM_TOKEN في Railway Variables")
+
+# 🔥 تحليل مبدئي (نطوره لاحقًا)
 def analyze_image():
-    # تحليل مبدئي (نطور لاحقًا)
     import random
 
     signals = ["BUY 🟢", "SELL 🔴", "WAIT ⚠️"]
@@ -20,7 +24,7 @@ def analyze_image():
 
     return signals[random.randint(0,2)], reasons[random.randint(0,2)], strength
 
-# 📥 عند استقبال صورة
+# 📥 استقبال الصور
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📸 جاري تحليل الشارت...")
 
@@ -38,7 +42,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(msg)
 
-# تشغيل
+# 🚀 تشغيل البوت
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
