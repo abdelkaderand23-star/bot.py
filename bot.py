@@ -1,102 +1,47 @@
 import requests
-import pandas as pd
-from ta.trend import EMAIndicator
-from ta.momentum import RSIIndicator
+from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+TOKEN = "PUT_TELEGRAM_TOKEN_HERE"
 
-TOKEN = "PUT_YOUR_TELEGRAM_TOKEN_HERE"
+# 🔥 هنا نحط API تبع تحليل الصور (مؤقت تحليل بسيط)
+def analyze_image():
+    # تحليل مبدئي (نطور لاحقًا)
+    import random
 
-# =========================
-# جلب البيانات من Binance
-# =========================
-def get_data(symbol):
-    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1m&limit=100"
-    data = requests.get(url).json()
+    signals = ["BUY 🟢", "SELL 🔴", "WAIT ⚠️"]
+    reasons = [
+        "ترند صاعد + زخم قوي",
+        "ترند هابط + كسر دعم",
+        "سوق متذبذب"
+    ]
 
-    df = pd.DataFrame(data, columns=[
-        "time","open","high","low","close","volume",
-        "close_time","qav","trades","tbbav","tbqav","ignore"
-    ])
+    strength = random.randint(50, 90)
 
-    df["close"] = df["close"].astype(float)
-    return df
+    return signals[random.randint(0,2)], reasons[random.randint(0,2)], strength
 
-# =========================
-# التحليل
-# =========================
-def analyze(symbol):
-    df = get_data(symbol)
+# 📥 عند استقبال صورة
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📸 جاري تحليل الشارت...")
 
-    ema = EMAIndicator(df["close"], window=20).ema_indicator()
-    rsi = RSIIndicator(df["close"], window=14).rsi()
+    signal, reason, strength = analyze_image()
 
-    last_price = df["close"].iloc[-1]
-    last_ema = ema.iloc[-1]
-    last_rsi = rsi.iloc[-1]
+    msg = f"""
+🤖 تحليل الشارت
 
-    if last_price > last_ema and last_rsi < 30:
-        signal = "BUY 🟢"
-        sl = last_price - 0.002
-        tp = last_price + 0.004
+📊 الإشارة: {signal}
+💡 السبب: {reason}
+💪 القوة: {strength}%
 
-    elif last_price < last_ema and last_rsi > 70:
-        signal = "SELL 🔴"
-        sl = last_price + 0.002
-        tp = last_price - 0.004
-
-    else:
-        signal = "NO TRADE ⚠️"
-        sl = "-"
-        tp = "-"
-
-    return f"""
-📊 {symbol}
-
-السعر: {last_price:.5f}
-EMA: {last_ema:.5f}
-RSI: {last_rsi:.2f}
-
-📈 الإشارة: {signal}
-
-🎯 TP: {tp}
-🛑 SL: {sl}
+⚠️ تأكد قبل الدخول
 """
 
-# =========================
-# الأوامر
-# =========================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [["EURUSD", "GBPUSD", "XAUUSD"]]
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text(msg)
 
-    await update.message.reply_text(
-        "اختر الزوج 👇",
-        reply_markup=reply_markup
-    )
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-
-    mapping = {
-        "EURUSD": "EURUSDT",
-        "GBPUSD": "GBPUSDT",
-        "XAUUSD": "XAUUSDT"
-    }
-
-    if text in mapping:
-        result = analyze(mapping[text])
-        await update.message.reply_text(result)
-    else:
-        await update.message.reply_text("اختر زوج من الأزرار فقط")
-
-# =========================
-# تشغيل البوت
-# =========================
+# تشغيل
 app = ApplicationBuilder().token(TOKEN).build()
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
+print("🤖 IMAGE BOT RUNNING...")
 app.run_polling()
