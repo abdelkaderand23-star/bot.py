@@ -1,51 +1,25 @@
-import requests
 import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
+from PIL import Image
 
-# 🔐 نجيب التوكن من Variables
-TOKEN = os.getenv("TELEGRAM_TOKEN")
+TOKEN = os.getenv("TOKEN")
 
-if not TOKEN:
-    raise ValueError("❌ لازم تضيف TELEGRAM_TOKEN في Railway Variables")
+async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo = update.message.photo[-1]
+    file = await context.bot.get_file(photo.file_id)
+    
+    await file.download_to_drive("chart.jpg")
 
-# 🔥 تحليل مبدئي (نطوره لاحقًا)
-def analyze_image():
-    import random
+    img = Image.open("chart.jpg")
 
-    signals = ["BUY 🟢", "SELL 🔴", "WAIT ⚠️"]
-    reasons = [
-        "ترند صاعد + زخم قوي",
-        "ترند هابط + كسر دعم",
-        "سوق متذبذب"
-    ]
+    # تحليل بسيط (تقدر تطوره لاحقًا)
+    decision = "📈 BUY" if img.size[0] > 500 else "📉 SELL"
 
-    strength = random.randint(50, 90)
+    await update.message.reply_text(f"التحليل: {decision}")
 
-    return signals[random.randint(0,2)], reasons[random.randint(0,2)], strength
-
-# 📥 استقبال الصور
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📸 جاري تحليل الشارت...")
-
-    signal, reason, strength = analyze_image()
-
-    msg = f"""
-🤖 تحليل الشارت
-
-📊 الإشارة: {signal}
-💡 السبب: {reason}
-💪 القوة: {strength}%
-
-⚠️ تأكد قبل الدخول
-"""
-
-    await update.message.reply_text(msg)
-
-# 🚀 تشغيل البوت
 app = ApplicationBuilder().token(TOKEN).build()
 
-app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+app.add_handler(MessageHandler(filters.PHOTO, handle_image))
 
-print("🤖 IMAGE BOT RUNNING...")
-app.run_polling()
+app.run_polling)
