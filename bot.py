@@ -1,82 +1,74 @@
 import requests
-import os
+import pandas as pd
+from ta.trend import EMAIndicator
+from ta.momentum import RSIIndicator
+
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TOKEN = "PUT_YOUR_TELEGRAM_TOKEN_HERE"
 
-pairs = ["EURUSD", "GBPUSD", "XAUUSD"]
-
-# 📊 جلب بيانات من Binance (لأنها بدون حظر)
+# =========================
+# جلب البيانات من Binance
+# =========================
 def get_data(symbol):
-    try:
-        symbol = symbol + "T" if symbol != "XAUUSD" else "BTCUSDT"
-        url = "https://api.binance.com/api/v3/klines"
-        params = {"symbol": symbol, "interval": "1m", "limit": 100}
-        data = requests.get(url, params=params).json()
-        closes = [float(c[4]) for c in data]
-        return closes
-    except:
-        return None
+    url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1m&limit=100"
+    data = requests.get(url).json()
 
-def calculate_rsi(closes, period=14):
-    gains, losses = [], []
-    for i in range(1, len(closes)):
-        diff = closes[i] - closes[i-1]
-        gains.append(max(diff, 0))
-        losses.append(abs(min(diff, 0)))
+    df = pd.DataFrame(data, columns=[
+        "time","open","high","low","close","volume",
+        "close_time","qav","trades","tbbav","tbqav","ignore"
+    ])
 
-    avg_gain = sum(gains[-period:]) / period
-    avg_loss = sum(losses[-period:]) / period
+    df["close"] = df["close"].astype(float)
+    return df
 
-    if avg_loss == 0:
-        return 100
+# =========================
+# التحليل
+# =========================
+def analyze(symbol):
+    df = get_data(symbol)
 
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+    ema = EMAIndicator(df["close"], window=20).ema_indicator()
+    rsi = RSIIndicator(df["close"], window=14).rsi()
 
-def calculate_ema(prices, period=9):
-    ema = prices[0]
-    k = 2 / (period + 1)
-    for price in prices:
-        ema = price * k + ema * (1 - k)
-    return ema
+    last_price = df["close"].iloc[-1]
+    last_ema = ema.iloc[-1]
+    last_rsi = rsi.iloc[-1]
 
-def analyze(pair):
-    closes = get_data(pair)
-    if not closes:
-        return "❌ خطأ في جلب البيانات"
+    if last_price > last_ema and last_rsi < 30:
+        signal = "BUY 🟢"
+        sl = last_price - 0.002
+        tp = last_price + 0.004
 
-    price = closes[-1]
-    rsi = calculate_rsi(closes)
-    ema = calculate_ema(closes)
+    elif last_price < last_ema and last_rsi > 70:
+        signal = "SELL 🔴"
+        sl = last_price + 0.002
+        tp = last_price - 0.004
 
-    signal = "WAIT"
-
-    if rsi < 35 and price > ema:
-        signal = "BUY"
-    elif rsi > 65 and price < ema:
-        signal = "SELL"
-
-    tp = round(price * 1.002, 5)
-    sl = round(price * 0.998, 5)
+    else:
+        signal = "NO TRADE ⚠️"
+        sl = "-"
+        tp = "-"
 
     return f"""
-📊 {pair} ANALYSIS
+📊 {symbol}
 
-💰 Price: {price}
-📈 RSI: {round(rsi,2)}
-📉 EMA: {round(ema,5)}
+السعر: {last_price:.5f}
+EMA: {last_ema:.5f}
+RSI: {last_rsi:.2f}
 
-🚦 Signal: {signal}
+📈 الإشارة: {signal}
 
 🎯 TP: {tp}
 🛑 SL: {sl}
 """
 
-# 🚀 عند /start
+# =========================
+# الأوامر
+# =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[p] for p in pairs]
+    keyboard = [["EURUSD", "GBPUSD", "XAUUSD"]]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
     await update.message.reply_text(
@@ -84,21 +76,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-# 📊 عند اختيار زوج
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pair = update.message.text
+    text = update.message.text
 
-    if pair in pairs:
-        result = analyze(pair)
+    mapping = {
+        "EURUSD": "EURUSDT",
+        "GBPUSD": "GBPUSDT",
+        "XAUUSD": "XAUUSDT"
+    }
+
+    if text in mapping:
+        result = analyze(mapping[text])
         await update.message.reply_text(result)
     else:
-        await update.message.reply_text("❌ اختر من الأزرار فقط")
+        await update.message.reply_text("اختر زوج من الأزرار فقط")
 
+# =========================
 # تشغيل البوت
-app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+# =========================
+app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(MessageHandler(filters.TEXT, handle_message))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-print("🤖 BOT STARTED...")
 app.run_polling()
