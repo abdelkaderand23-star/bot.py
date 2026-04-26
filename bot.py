@@ -13,8 +13,11 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     img = Image.open("chart.jpg")
 
-    # تحليل بسيط (تقدر تطوره لاحقًا)
-    decision = "📈 BUY" if img.size[0] > 500 else "📉 SELL"
+    # تحليل بسيط
+    if img.size[0] > 500:
+        decision = "📈 BUY"
+    else:
+        decision = "📉 SELL"
 
     await update.message.reply_text(f"التحليل: {decision}")
 
@@ -22,4 +25,4 @@ app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(MessageHandler(filters.PHOTO, handle_image))
 
-app.run_polling)
+app.run_polling()
