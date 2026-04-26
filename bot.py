@@ -1,28 +1,28 @@
 import os
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
-from PIL import Image
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-TOKEN = os.getenv("TOKEN")
+# قراءة المتغيرات من Railway
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
 
-async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photo = update.message.photo[-1]
-    file = await context.bot.get_file(photo.file_id)
-    
-    await file.download_to_drive("chart.jpg")
+# أمر /start
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔥 البوت شغال يا وحش!")
 
-    img = Image.open("chart.jpg")
+# أمر /signal (تجربة)
+async def signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📊 إشارة: BUY (تجربة)")
 
-    # تحليل بسيط
-    if img.size[0] > 500:
-        decision = "📈 BUY"
-    else:
-        decision = "📉 SELL"
+# تشغيل البوت
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    await update.message.reply_text(f"التحليل: {decision}")
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("signal", signal))
 
-app = ApplicationBuilder().token(TOKEN).build()
+    print("✅ Bot is running...")
+    app.run_polling()
 
-app.add_handler(MessageHandler(filters.PHOTO, handle_image))
-
-app.run_polling()
+if __name__ == "__main__":
+    main()
